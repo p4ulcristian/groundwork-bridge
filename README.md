@@ -14,7 +14,7 @@ asker; and every page answered by the server when it is opened fresh. The
 browser's following of the address bar is groundwork-screens's.
 
 ```clojure
-io.github.p4ulcristian/groundwork-bridge {:git/tag "v0.7.10" :git/sha "a8acef8"}
+io.github.p4ulcristian/groundwork-bridge {:git/tag "v0.7.11" :git/sha "6e1f1a9"}
 ```
 
 Needs Jetty 12 through [rj9a](https://github.com/sunng87/ring-jetty9-adapter)
