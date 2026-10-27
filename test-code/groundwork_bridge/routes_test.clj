@@ -2,6 +2,7 @@
   (:require
    [clojure.test :refer [deftest is testing]]
    [groundwork-bridge.api :as bridge]
+   [groundwork-bridge.routes :as routes]
    [groundwork-steps.api :as steps]
    [groundwork-bridge.test-log :as test-log :refer [log]]
    [groundwork-bridge.test-meter :refer [meter with-new-meter]]
@@ -105,3 +106,57 @@
          (try (bridge/make-ring-handler-from-routes [] {:files {:folder "x"}})
               (catch clojure.lang.ExceptionInfo e (:type (ex-data e))))))
   (is (fn? (bridge/make-ring-handler-from-routes [] {:files nil :not-found nil}))))
+
+(deftest accept-encoding-is-read-by-its-grammar
+  (let [takes? #(routes/does-request-take-gzip? {:headers (if % {"accept-encoding" %} {})})]
+    (testing "gzip listed, with a quality above 0"
+      (is (takes? "gzip"))
+      (is (takes? "gzip, deflate, br, zstd"))
+      (is (takes? "deflate;q=1, gzip;q=0.001"))
+      (is (takes? "x-gzip") "x-gzip is gzip"))
+    (testing "q=0 is no"
+      (is (not (takes? "gzip;q=0")))
+      (is (not (takes? "gzip;q=0.000, br")))
+      (is (not (takes? "br, gzip;q=0"))))
+    (testing "identity says nothing of gzip"
+      (is (not (takes? "identity")))
+      (is (not (takes? "identity;q=0")) "the file as it is still goes out: nothing else is taken")
+      (is (takes? "identity;q=0, gzip")))
+    (testing "*: every coding not listed"
+      (is (takes? "*"))
+      (is (takes? "br, *;q=0.5"))
+      (is (not (takes? "*;q=0")))
+      (is (not (takes? "*, gzip;q=0")) "gzip listed: its own quality")
+      (is (takes? "*;q=0, gzip")))
+    (testing "spacing and case"
+      (is (takes? " br ,\tgzip ; q=0.5 "))
+      (is (takes? "GZip;Q=1"))
+      (is (not (takes? "GZIP ; Q=0")))
+      (is (takes? "br,,gzip") "an empty element of the list"))
+    (testing "another coding whose name has gzip in it is not gzip"
+      (is (not (takes? "gzipper")))
+      (is (not (takes? "nogzip"))))
+    (testing "an element outside the grammar is left out"
+      (is (not (takes? "gzip;q=1.5")) "q above 1")
+      (is (not (takes? "gzip;q=abc")))
+      (is (not (takes? "gzip;level=9")) "a parameter other than q")
+      (is (takes? "gzip;q=2, br, gzip") "the next listing of gzip, the first that fits"))
+    (testing "no header, an empty one"
+      (is (not (takes? nil)))
+      (is (not (takes? ""))))))
+
+(deftest a-gzipped-copy-goes-out-only-when-gzip-is-taken
+  (let [folder  (make-files-folder)
+        _       (spit (java.io.File. ^String folder "main.3F9A0C1D.js.gz") "gzipped bytes")
+        handler (bridge/make-ring-handler-from-routes [] {:files {:folder                     folder
+                                                                    :hashed-name-min-hex-digits 8
+                                                                    :hashed-file-cache-seconds  600}
+                                                            :not-found nil})
+        get-file #(handler {:request-method :get :uri "/main.3F9A0C1D.js" :headers (if % {"accept-encoding" %} {})})]
+    (let [response (get-file "gzip, br")]
+      (is (= "gzip" (get-in response [:headers "content-encoding"])))
+      (is (= "gzipped bytes" (slurp (:body response)))))
+    (doseq [header [nil "gzip;q=0" "identity" "gzipper"]]
+      (let [response (get-file header)]
+        (is (nil? (get-in response [:headers "content-encoding"])) (pr-str header))
+        (is (= "hashed" (slurp (:body response))) (pr-str header))))))

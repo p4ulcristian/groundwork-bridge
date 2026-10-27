@@ -1,3 +1,5 @@
+> **Changed in part** by [Accept-Encoding is read by its grammar; gzip;q=0 is no](2026-10-27-accept-encoding-is-read-by-its-grammar.md) (2026-10-27, v0.7.13): a browser takes gzip when its Accept-Encoding lists gzip (or x-gzip), else *, with a quality above 0.
+
 > **Changed in part** by [The server is Jetty 12 through rj9a](2026-10-23-the-server-is-jetty-12-through-rj9a.md) (2026-10-23, v0.7.5): `:max-header-line-bytes` is `:max-request-head-bytes` (the request line and headers together, 431); `:idle-timeout-ms` and `:threads` are new, required; the http-kit options and loggers named here are gone.
 
 > **Changed in part** by [A message answered off the server's addresses is limited by the caller's limiter](2026-10-23-a-message-answered-off-the-servers-addresses-is-limited-by-the-callers-limiter.md) (2026-10-23, v0.7.6): `answer-message` takes `:no-rate-limits` or a limiter from `make-message-limiter`, which counts each handler's `:rate-limit` off the server's addresses, in buckets of its own.

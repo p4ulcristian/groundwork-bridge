@@ -8,6 +8,7 @@
    the browser gets the same map from the page (the app puts it there), so
    the two sides can't disagree."
   (:require
+   [clojure.string :as str]
    [groundwork-bridge.settings :as settings]
    [reitit.ring :as reitit]))
 
@@ -27,15 +28,43 @@
   [min-hex-digits]
   (re-pattern (str "\\.[0-9A-Fa-f]{" min-hex-digits ",}\\.[a-z]+$")))
 
-(defn- does-browser-take-gzip? [request]
-  (boolean (some-> (get-in request [:headers "accept-encoding"]) (.contains "gzip"))))
+;; RFC 9110, 12.5.3: Accept-Encoding = #( codings [ weight ] ), codings a
+;; content-coding token, "identity" or "*", weight = OWS ";" OWS "q=" qvalue,
+;; qvalue = ( "0" [ "." 0*3DIGIT ] ) / ( "1" [ "." 0*3("0") ] ), all in any case
+(def ^:private accepted-coding-pattern
+  #"(?i)([!#$%&'*+.^_`|~0-9a-z-]+)(?:[ \t]*;[ \t]*q=(0(?:\.[0-9]{0,3})?|1(?:\.0{0,3})?))?")
+
+(defn read-accepted-codings
+  "Accept-Encoding's codings in the header's order, [[coding quality] …],
+   the coding in lowercase, the quality a double (1.0 when unsaid): HTTP's
+   list split by , (an empty element allowed), the spaces and tabs around
+   each taken off; an element that isn't a coding with an optional q (a
+   q above 1, a parameter other than q) is left out."
+  [header]
+  (into []
+        (keep (fn [element]
+                (when-let [[_ coding quality] (re-matches accepted-coding-pattern (str/trim element))]
+                  [(str/lower-case coding) (if quality (parse-double quality) 1.0)])))
+        (str/split (or header "") #",")))
+
+(defn does-request-take-gzip?
+  "Whether the request's Accept-Encoding takes gzip: gzip (or x-gzip, the
+   same, RFC 9110 8.4.1.3) listed with a quality above 0, else * listed
+   with one; the first listing of each counts. gzip;q=0, or *;q=0 with gzip
+   unlisted, is no; a request without Accept-Encoding gets the file as it
+   is."
+  [request]
+  (let [codings  (read-accepted-codings (get-in request [:headers "accept-encoding"]))
+        first-of (fn [names] (some (fn [[coding quality]] (when (contains? names coding) quality)) codings))
+        quality  (or (first-of #{"gzip" "x-gzip"}) (first-of #{"*"}))]
+    (boolean (and quality (pos? quality)))))
 
 (defn- send-gzipped-copy-when-there
   "A built file with file.gz beside it goes out gzipped to a browser that
    takes gzip: the same file, a tenth of the bytes."
   [file-handler files-folder]
   (fn [request]
-    (let [gzipped (when (does-browser-take-gzip? request)
+    (let [gzipped (when (does-request-take-gzip? request)
                     (java.io.File. (str files-folder (:uri request) ".gz")))]
       (if-let [response (and gzipped (.isFile gzipped) (file-handler request))]
         (-> response
