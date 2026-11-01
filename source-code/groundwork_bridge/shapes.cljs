@@ -16,24 +16,69 @@
 (defn- turn-each-name [message turn]
   (into {} (map (fn [[message-name data]] [message-name (turn message-name data)])) message))
 
+(defn- find-shapes-of-name
+  "A name's shapes; a name the table doesn't have throws: nothing is sent."
+  [shapes message-name]
+  (when-not (contains? shapes message-name)
+    (throw (ex-info (str "No shapes named " message-name)
+                    {:type :groundwork-bridge/no-shapes :message-name message-name})))
+  (get shapes message-name))
+
+(defn turn-message-into-json-data-or-errors
+  "Each name's data as JSON data, by its :params-shape: {:json-data
+   message :errors errors}, the message of the names whose data fits
+   (a name whose shape is nil passes as it is) and, by name, why each
+   other's doesn't (a key its shape doesn't name among them), {} when
+   every name's fits. A name without shapes throws
+   (:groundwork-bridge/no-shapes): nothing is sent."
+  [shaper shapes message]
+  (reduce (fn [turned [message-name data]]
+            (if-let [shape (:params-shape (find-shapes-of-name shapes message-name))]
+              (let [{:keys [json-data errors]} (shaped-json/turn-shaped-data-into-json-data-or-errors shaper shape data)]
+                (if errors
+                  (assoc-in turned [:errors message-name] errors)
+                  (assoc-in turned [:json-data message-name] json-data)))
+              (assoc-in turned [:json-data message-name] data)))
+          {:json-data {} :errors {}}
+          message))
+
 (defn turn-message-into-json-data
   "Each name's data as JSON data, by its :params-shape. A name without
-   shapes, or data that doesn't fit its shape or carries a key it doesn't
-   name, throws: nothing is sent."
+   shapes (:groundwork-bridge/no-shapes), or data that doesn't fit its
+   shape or carries a key it doesn't name (:groundwork-bridge/bad-params,
+   with the first such name and why), throws: nothing is sent. The ws
+   line's send; http's answers a misfit as a refusal instead
+   (make-bad-params-refusals)."
   [shaper shapes message]
-  (turn-each-name message (fn [message-name data]
-                            (when-not (contains? shapes message-name)
-                              (throw (ex-info (str "No shapes named " message-name)
-                                              {:type :groundwork-bridge/no-shapes :message-name message-name})))
-                            (if-let [shape (get-in shapes [message-name :params-shape])]
-                              (let [{:keys [json-data errors]} (shaped-json/turn-shaped-data-into-json-data-or-errors shaper shape data)]
-                                (when errors
-                                  (throw (ex-info (str message-name "'s params don't fit its shape")
-                                                  {:type         :groundwork-bridge/bad-params
-                                                   :message-name message-name
-                                                   :errors       errors})))
-                                json-data)
-                              data))))
+  (let [{:keys [json-data errors]} (turn-message-into-json-data-or-errors shaper shapes message)]
+    (when-let [[message-name name-errors] (first errors)]
+      (throw (ex-info (str message-name "'s params don't fit its shape: " (pr-str name-errors))
+                      {:type         :groundwork-bridge/bad-params
+                       :message-name message-name
+                       :errors       name-errors})))
+    json-data))
+
+(defn make-bad-params-refusals
+  "The browser's own answer to each name whose params don't fit its
+   :params-shape, as the server would have answered it, so nothing waits
+   for an answer that can't come: :groundwork-steps/invalid {:errors …},
+   with no request id (nothing was sent). errors: {name errors}."
+  [errors]
+  (update-vals errors #(steps/make-refusal :groundwork-steps/invalid {:errors %})))
+
+(defn report-bad-params!
+  "A name whose params don't fit is the page's mistake: each is reported
+   as the browser reports an uncaught error (reportError: the console
+   shows it, and the page's error listeners hear it, an app's error list
+   among them), though nothing throws; the console's error where the
+   browser has no reportError. errors: {name errors}."
+  [errors]
+  (doseq [[message-name name-errors] errors]
+    (let [error (ex-info (str message-name "'s params don't fit its shape: " (pr-str name-errors))
+                         {:type :groundwork-bridge/bad-params :message-name message-name :errors name-errors})]
+      (if (exists? js/reportError)
+        (js/reportError error)
+        (js/console.error error)))))
 
 (defn- make-unfit
   "The browser's own refusal of an answer that doesn't fit: :groundwork-steps/unfit

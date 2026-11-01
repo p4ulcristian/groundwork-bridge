@@ -41,8 +41,15 @@
    when the server sent notes. It never fails for want of an answer: no
    response (the network), or one that isn't the server's JSON (a proxy's
    502, a 413), is {:groundwork-steps/refused :groundwork-steps/no-answer :groundwork-steps/data
-   {:http-status n}} under each name, n nil when no response came. A name
-   the shapes don't have throws (:groundwork-bridge/no-shapes); nothing is sent.
+   {:http-status n}} under each name, n nil when no response came. Nor
+   does it throw for params that don't fit: a name whose params don't fit
+   its :params-shape (or carry a key it doesn't name) isn't sent, and is
+   answered {:groundwork-steps/refused :groundwork-steps/invalid
+   :groundwork-steps/data {:errors …}}, as the server would answer it,
+   with no request id; the page's mistake is reported as the browser
+   reports an uncaught error (reportError: the console, and the page's
+   error listeners). The names that fit are sent. A name the shapes don't
+   have throws (:groundwork-bridge/no-shapes); nothing is sent.
    Options, every key required: :shaper, the app's shaper; :headers, more
    request headers by lowercase name, {} for none (accept and
    content-type are bridge's own); :keep-alive?, true for a request that
@@ -89,7 +96,9 @@
 
 (defn send-message-on-ws-line!
   "ws: sends a named message on the line, its data by :params-shape,
-   written by the line's groundwork-shaped-json. Whether it was open."
+   written by the line's groundwork-shaped-json. Whether it was open.
+   Params that don't fit their shape throw (:groundwork-bridge/bad-params):
+   nothing is sent."
   [line message]
   (ws/send-message-on-ws-line! line message))
 

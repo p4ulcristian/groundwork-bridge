@@ -175,3 +175,64 @@
                       "the server's answer: a refusal and data side by side"))
           (.catch #(is false (str %)))
           (.finally done)))))
+
+(defn- with-reported-errors
+  "Runs (f), a promise, with the browser's reportError kept in reported."
+  [reported f]
+  (let [had? (exists? js/reportError)
+        was  (when had? js/reportError)]
+    (set! (.-reportError js/globalThis) #(swap! reported conj %))
+    (-> (f) (.finally #(if had? (set! (.-reportError js/globalThis) was) (js-delete js/globalThis "reportError"))))))
+
+(deftest params-that-dont-fit-are-answered-invalid-not-thrown
+  (async done
+    (let [fetched  (atom [])
+          reported (atom [])
+          fetch    (fn [_ options]
+                     (swap! fetched conj (js->clj (js/JSON.parse (.-body options))))
+                     (js/Promise.resolve #js {:status 200 :text (fn [] (js/Promise.resolve "{\"greetings/hello\":\"hi\"}"))}))
+          send!    #(groundwork-bridge.api/send-message! "/mail/http" shapes-by-name % {:shaper shaper :headers {} :keep-alive? false})
+          bad      {:shop/id shop-id :extra 1}]
+      (-> (with-reported-errors reported
+            #(with-fetch fetch
+               (fn [] (-> (let [sent (try (send! {:shops/total bad}) (catch :default e e))]
+                            (is (instance? js/Promise sent) "a promise, never a throw")
+                            sent)
+                          (.then (fn [answer]
+                                   (is (= :groundwork-steps/invalid (get-in answer [:shops/total :groundwork-steps/refused])))
+                                   (is (contains? (get-in answer [:shops/total :groundwork-steps/data :errors]) :extra) "the shaper's errors, by key")
+                                   (is (not (contains? (:shops/total answer) :groundwork-steps/request-id)) "nothing was sent: no request id")
+                                   (is (true? (steps/is-error-answer? (:shops/total answer))))
+                                   (is (= [] @fetched) "nothing is sent")
+                                   (is (= [[:groundwork-bridge/bad-params :shops/total]]
+                                          (mapv (comp (juxt :type :message-name) ex-data) @reported))
+                                       "reported as an uncaught error is, though nothing throws")))
+                          (.then (fn [_] (send! {:shops/total bad :greetings/hello {}})))
+                          (.then (fn [answer]
+                                   (is (= [{"greetings/hello" {}}] @fetched) "the names that fit are sent")
+                                   (is (= "hi" (:greetings/hello answer)))
+                                   (is (= :groundwork-steps/invalid (get-in answer [:shops/total :groundwork-steps/refused])))))))))
+          (.catch #(is false (str %)))
+          (.finally done)))))
+
+(deftest params-that-dont-fit-are-shown-in-the-console-without-report-error
+  (async done
+    (let [logged  (atom [])
+          error!  (.-error js/console)
+          had?    (exists? js/reportError)
+          was     (when had? js/reportError)]
+      (when had? (js-delete js/globalThis "reportError"))
+      (set! (.-error js/console) #(swap! logged conj %))
+      (-> (groundwork-bridge.api/send-message! "/mail/http" shapes-by-name {:shops/total {:shop/id "seven"}} {:shaper shaper :headers {} :keep-alive? false})
+          (.then (fn [answer]
+                   (is (= :groundwork-steps/invalid (get-in answer [:shops/total :groundwork-steps/refused])))
+                   (is (= [:groundwork-bridge/bad-params] (mapv (comp :type ex-data) @logged)))))
+          (.catch #(is false (str %)))
+          (.finally (fn []
+                      (set! (.-error js/console) error!)
+                      (when had? (set! (.-reportError js/globalThis) was))
+                      (done)))))))
+
+(deftest on-the-ws-line-params-that-dont-fit-throw
+  (is (= :groundwork-bridge/bad-params
+         (:type (find-problems #(shapes/turn-message-into-json-data shaper shapes-by-name {:shops/total {:shop/id "seven"}}))))))

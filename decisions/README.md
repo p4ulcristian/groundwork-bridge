@@ -50,3 +50,4 @@ All but the last twelve were made while mailroom was three libraries inside Grou
 - [The unsaved-changes hold asks with the app's own dialog](https://github.com/p4ulcristian/parlor/blob/tidy-up/decisions/2026-10-23-the-hold-asks-with-the-apps-own-dialog.md) (parlor's; bridge's part: `:may-leave?` is asked with the move, and `finish-move!` finishes one it held back; built on tidy-up, not released)
 - [An sse line tells its break, once, for an offline banner](2026-10-23-an-sse-line-tells-its-break.md) (built on tidy-up, not released)
 - [Accept-Encoding is read by its grammar; gzip;q=0 is no](2026-10-27-accept-encoding-is-read-by-its-grammar.md) (v0.7.13)
+- [Params that don't fit are answered `:groundwork-steps/invalid` in the browser, not thrown](2026-11-01-params-that-dont-fit-are-answered-invalid-in-the-browser-not-thrown.md) (v0.7.14)

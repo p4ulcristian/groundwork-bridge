@@ -35,20 +35,34 @@
       (shapes/turn-answer-into-shaped-data shaper shapes-by-name data)
       (shapes/make-no-answer message status))))
 
+(defn- post-message!
+  "POSTs the JSON data of a message; a promise of its answer, shaped, or
+   :groundwork-steps/no-answer under each of its names."
+  [address shapes-by-name message json-data {:keys [shaper headers keep-alive?]}]
+  (-> (js/fetch address (make-fetch-options shaper headers keep-alive? json-data))
+      (.then (fn [response]
+               (-> (.text response)
+                   (.then #(read-answer shaper shapes-by-name message (.-status response) %)
+                          (fn [_] (shapes/make-no-answer message (.-status response))))))
+             (fn [_] (shapes/make-no-answer message nil)))))
+
 (defn send-message!
   "POSTs {:orders/of-shop {…}} to the address. A promise of the answer,
    {:orders/of-shop …}: shaped data by the shapes, or a refusal, through
    the options' :shaper; it never fails for want of an answer: no response
    (the network) or one that isn't the server's JSON is :groundwork-steps/no-answer
-   under each name. The shapes and the options are checked first, and a
-   name without shapes isn't sent."
+   under each name. A name whose params don't fit its :params-shape isn't
+   sent: it is answered :groundwork-steps/invalid {:errors …} here, as the
+   server would answer it, and reported (shapes/report-bad-params!); the
+   names that fit are sent, and when none does nothing is. The shapes and
+   the options are checked first, and a name without shapes isn't sent."
   [address shapes-by-name message options]
   (settings/check-shapes-by-name shapes-by-name)
-  (let [{:keys [shaper headers keep-alive?]} (settings/check-send-options options)
-        json-data                          (shapes/turn-message-into-json-data shaper shapes-by-name message)]
-    (-> (js/fetch address (make-fetch-options shaper headers keep-alive? json-data))
-        (.then (fn [response]
-                 (-> (.text response)
-                     (.then #(read-answer shaper shapes-by-name message (.-status response) %)
-                            (fn [_] (shapes/make-no-answer message (.-status response))))))
-               (fn [_] (shapes/make-no-answer message nil))))))
+  (let [options                   (settings/check-send-options options)
+        {:keys [json-data errors]} (shapes/turn-message-into-json-data-or-errors (:shaper options) shapes-by-name message)
+        refusals                  (shapes/make-bad-params-refusals errors)]
+    (shapes/report-bad-params! errors)
+    (-> (if (and (empty? json-data) (seq errors))
+          (js/Promise.resolve {})
+          (post-message! address shapes-by-name (select-keys message (keys json-data)) json-data options))
+        (.then #(merge % refusals)))))

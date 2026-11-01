@@ -68,7 +68,9 @@ gives: `:groundwork-steps/too-many {:retry-after-ms n}` (over the
 `:groundwork-steps/failed` (a bug: a step threw, no step answered, an answer or a
 refusal's data didn't fit its shape, a reason the handler doesn't
 declare, a name no handler has), and in the browser `:groundwork-steps/no-answer
-{:http-status n}` and `:groundwork-steps/unfit {:errors …}`. Every refusal is
+{:http-status n}` and `:groundwork-steps/unfit {:errors …}`; `send-message!`
+gives `:groundwork-steps/invalid` in the browser too, before anything is sent
+([why](decisions/2026-11-01-params-that-dont-fit-are-answered-invalid-in-the-browser-not-thrown.md)). Every refusal is
 written to the message's log, `:info :groundwork-bridge/refused`; every bug with its
 details, `:error` (a name no handler has, `:warn`); either is found by the
 refusal's request id. A POST carrying several names stays 200.
@@ -100,7 +102,7 @@ the app's own route, the REPL's, a test's on a meter of its own
 | server | `make-message-limiter` | a limiter for `answer-message`: each handler's `:rate-limit` counted per asker, by the caller's `:find-rate-limit-key`, in buckets of its own, not the server's ([why](decisions/2026-10-23-a-message-answered-off-the-servers-addresses-is-limited-by-the-callers-limiter.md)) |
 | server | `find-client-address` | the asker's address, behind a proxy too |
 | server | `make-rate-limited-ring-handler` | a plain route (not a message) behind its own limiter, the same buckets, `429` over it ([why](decisions/2026-10-23-a-plain-route-is-rate-limited-by-the-same-buckets.md)) |
-| browser | `send-message!` | http: a promise of the answer, shaped, by the options' `:shaper`, with the options' `:headers` beside bridge's own (`{}` for none), and `:keep-alive?`, true for a request that finishes after the page closes (fetch's keepalive); it never fails for want of an answer: no response, or one that isn't the server's JSON, is `:groundwork-steps/no-answer {:http-status n}` under each name |
+| browser | `send-message!` | http: a promise of the answer, shaped, by the options' `:shaper`, with the options' `:headers` beside bridge's own (`{}` for none), and `:keep-alive?`, true for a request that finishes after the page closes (fetch's keepalive); it never fails for want of an answer: no response, or one that isn't the server's JSON, is `:groundwork-steps/no-answer {:http-status n}` under each name; nor throws for params that don't fit their `:params-shape`: that name isn't sent, it is answered `:groundwork-steps/invalid {:errors …}` (no request id) and reported with the browser's `reportError` (the console, and the page's error listeners), the names that fit sent |
 | browser | `open-sse-line!` `close-sse-line!` `open-ws-line!` `send-message-on-ws-line!` `close-ws-line!` | sse and ws lines, reopened after a break until closed (sse: after `:reconnect-after-ms`, given, also when the server answered with an HTTP error; ws: after `:reopen-after-ms`, given); an sse line says when it opens (`:on-open`, `again?` after a break) and when it breaks (`:on-break`, once per break), the line's status for an offline banner |
 
 Nothing has a default: every value that sets behaviour is written out,
