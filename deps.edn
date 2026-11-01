@@ -12,7 +12,7 @@
   metosin/reitit-ring               {:mvn/version "0.11.0"}
   ;; groundwork-steps: a handler's steps, their context's keys and the refusal's shape,
   ;; shared with the libraries above (both sides)
-  io.github.p4ulcristian/groundwork-steps       {:git/tag "v0.1.0" :git/sha "ed9458e"}
+  io.github.p4ulcristian/groundwork-steps       {:git/tag "v0.1.1" :git/sha "4a48036"}
   ;; groundwork-shaped-json: data that crosses an edge comes back as what it was; the app makes
   ;; the shaper and hands it in
   io.github.p4ulcristian/groundwork-shaped-json       {:git/tag "v0.2.2" :git/sha "1c0fcf9"}
