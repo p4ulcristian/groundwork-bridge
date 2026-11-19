@@ -10,6 +10,8 @@
   info.sunng/ring-jetty9-adapter    {:mvn/version "0.40.5"}
   ;; the server's routes: reitit-ring
   metosin/reitit-ring               {:mvn/version "0.11.0"}
+  ;; Ring's wrap-not-modified: a file the browser already has is answered 304 (routes)
+  ring/ring-core                    {:mvn/version "1.15.5"}
   ;; groundwork-steps: a handler's steps, their context's keys and the refusal's shape,
   ;; shared with the libraries above (both sides)
   io.github.p4ulcristian/groundwork-steps       {:git/tag "v0.1.1" :git/sha "4a48036"}

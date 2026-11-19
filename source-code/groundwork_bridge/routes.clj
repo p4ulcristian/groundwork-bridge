@@ -10,7 +10,8 @@
   (:require
    [clojure.string :as str]
    [groundwork-bridge.settings :as settings]
-   [reitit.ring :as reitit]))
+   [reitit.ring :as reitit]
+   [ring.middleware.not-modified :as not-modified]))
 
 (defn make-server-routes-for-pages
   "A GET route for each page, answered by page-handler (the page's HTML and
@@ -90,7 +91,12 @@
   "Files from the folder, by their exact names: a folder's address is never
    answered with a file in it nor redirected (a page is answered by name,
    by the page handler), and no link leads out of the folder. Nil when the
-   folder has no such file, so the default handler answers."
+   folder has no such file, so the default handler answers. A browser that
+   asks whether a file it has changed (If-Modified-Since, against the
+   file's Last-Modified) is answered 304 with no body when it hasn't, by
+   Ring's wrap-not-modified: a no-cache file is asked again on every use,
+   and sending the whole file each time made a page that fetches its code
+   and then script-tags it download every file twice."
   [{:keys [folder] :as files}]
   (-> (reitit/create-file-handler {:path               "/"
                                    :root               folder
@@ -99,7 +105,8 @@
                                    :index-redirect?    false
                                    :allow-symlinks?    false})
       (send-gzipped-copy-when-there folder)
-      (add-cache-header files)))
+      (add-cache-header files)
+      (not-modified/wrap-not-modified)))
 
 (defn- make-default-handler
   "Written out as reitit's own: no route and no file, not-found's answer

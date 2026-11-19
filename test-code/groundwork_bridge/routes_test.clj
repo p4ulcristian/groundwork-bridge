@@ -101,6 +101,25 @@
       (is (= 404 (:status (get-file "/docs"))))
       (is (= 200 (:status (get-file "/docs/index.html")))))))
 
+(deftest a-file-not-changed-since-the-browsers-copy-is-answered-304
+  (let [folder   (make-files-folder)
+        handler  (bridge/make-ring-handler-from-routes [] {:files {:folder                     folder
+                                                                     :hashed-name-min-hex-digits 8
+                                                                     :hashed-file-cache-seconds  600}
+                                                             :not-found nil})
+        first    (handler {:request-method :get :uri "/app.css" :headers {}})
+        modified (get-in first [:headers "Last-Modified"])
+        again    (handler {:request-method :get :uri "/app.css" :headers {"if-modified-since" modified}})
+        older    (handler {:request-method :get :uri "/app.css"
+                           :headers {"if-modified-since" "Thu, 01 Jan 1970 00:00:00 GMT"}})]
+    (is (string? modified) "the file says when it last changed")
+    (testing "unchanged since the browser's copy: 304, no body"
+      (is (= 304 (:status again)))
+      (is (nil? (:body again))))
+    (testing "changed since: the whole file"
+      (is (= 200 (:status older)))
+      (is (= "plain" (slurp (:body older)))))))
+
 (deftest the-files-options-are-written-out
   (is (= :groundwork-bridge/bad-options
          (try (bridge/make-ring-handler-from-routes [] {:files {:folder "x"}})
