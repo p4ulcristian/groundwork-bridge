@@ -293,22 +293,49 @@
 (defn- has-lowercase-names? [headers]
   (every? #(= % (.toLowerCase ^String %)) (keys headers)))
 
+(def ^:private headers-entry
+  "More request headers, by lowercase name, {} for none (a write's one-time
+   key, say); accept and content-type are bridge's own and refused."
+  [:headers [:and
+             [:map-of :string :string]
+             [:fn {:error/message "header names are written in lowercase"} has-lowercase-names?]
+             [:fn {:error/message "accept and content-type are bridge's own"} leaves-bridge-headers-alone?]]])
+
+(def ^:private keep-alive-entry
+  "true, the request finishes even when the page closes (fetch's keepalive;
+   the browser refuses one whose body, with the other keepalive requests in
+   flight, passes 64 KB, which is :groundwork-steps/no-answer); false, a
+   plain request."
+  [:keep-alive? :boolean])
+
 (def send-options-shape
   "send-message!'s options, every key required. :shaper: the app's shaper,
-   made from the browser's settings. :headers: more request headers, by
-   lowercase name, {} for none (a write's one-time key, say); accept and
-   content-type are bridge's own and refused. :keep-alive?: true, the
-   request finishes even when the page closes (fetch's keepalive; the
-   browser refuses one whose body, with the other keepalive requests in
-   flight, passes 64 KB, which is :groundwork-steps/no-answer); false, a plain
-   request."
+   made from the browser's settings. :headers and :keep-alive?: as a
+   request's options (request-options-shape)."
   [:map {:closed true}
    shaper-entry
-   [:headers [:and
-              [:map-of :string :string]
-              [:fn {:error/message "header names are written in lowercase"} has-lowercase-names?]
-              [:fn {:error/message "accept and content-type are bridge's own"} leaves-bridge-headers-alone?]]]
-   [:keep-alive? :boolean]])
+   headers-entry
+   keep-alive-entry])
+
+(def http-sender-options-shape
+  "make-http-sender's options, every key required: what stays the same for
+   every request the sender sends. :shaper: the app's shaper, made from the
+   browser's settings."
+  [:map {:closed true}
+   shaper-entry])
+
+(def request-options-shape
+  "A request's options, given to an http sender with each message, every key
+   required: what may differ from one request to the next. :headers: more
+   request headers, by lowercase name, {} for none (a write's one-time key,
+   say); accept and content-type are bridge's own and refused.
+   :keep-alive?: true, the request finishes even when the page closes
+   (fetch's keepalive; the browser refuses one whose body, with the other
+   keepalive requests in flight, passes 64 KB, which is
+   :groundwork-steps/no-answer); false, a plain request."
+  [:map {:closed true}
+   headers-entry
+   keep-alive-entry])
 
 (def sse-options-shape
   "open-sse-line!'s options, every key required. :shaper: the app's shaper.
@@ -380,6 +407,12 @@
 
 (defn check-shapes-by-name [shapes-by-name]
   (check-data-for-shape "The shapes" :groundwork-bridge/bad-shapes shapes-by-name-shape shapes-by-name))
+
+(defn check-http-sender-options [options]
+  (check-data-for-shape "The options" :groundwork-bridge/bad-options http-sender-options-shape options))
+
+(defn check-request-options [options]
+  (check-data-for-shape "The options" :groundwork-bridge/bad-options request-options-shape options))
 
 (defn check-sse-options [options]
   (check-data-for-shape "The options" :groundwork-bridge/bad-options sse-options-shape options))

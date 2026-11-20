@@ -4,7 +4,7 @@ One file per decision: `YYYY-MM-DD-what-we-decided.md`. The title is the decisio
 
 bridge was named mailroom until 2026-10-23 ([mailroom is renamed bridge](2026-10-23-mailroom-is-renamed-bridge.md)); the decisions before it keep that name.
 
-All but the last twelve were made while mailroom was three libraries inside Groundwork, a Clojure framework (groundwork.server.transport, groundwork.browser.transport and groundwork.server.steps, named groundwork.web and ground-steps before); they name its parts (its settings, its sessions, access and sync, `/groundwork/...` addresses) where they came from. The ones they name that stayed with Groundwork are named by title, in plain text: "Every endpoint declares its answer", "The server puts the browser's settings in the page", "Postgres rings the bell", "The first cut is thirteen libraries". Groundwork now names both the family of libraries this one belongs to and the composer that puts them together; the decisions that stayed with Groundwork are in the composer's `decisions/`.
+All but the last thirteen were made while mailroom was three libraries inside Groundwork, a Clojure framework (groundwork.server.transport, groundwork.browser.transport and groundwork.server.steps, named groundwork.web and ground-steps before); they name its parts (its settings, its sessions, access and sync, `/groundwork/...` addresses) where they came from. The ones they name that stayed with Groundwork are named by title, in plain text: "Every endpoint declares its answer", "The server puts the browser's settings in the page", "Postgres rings the bell", "The first cut is thirteen libraries". Groundwork now names both the family of libraries this one belongs to and the composer that puts them together; the decisions that stayed with Groundwork are in the composer's `decisions/`.
 
 ## In force
 
@@ -41,6 +41,7 @@ All but the last twelve were made while mailroom was three libraries inside Grou
 - [A refusal is a named reason, declared on its handler](2026-10-23-a-refusal-is-a-named-reason-declared-on-its-handler.md) (built on tidy-up, not released), changed in part by [The steps and the answer's shape are groundwork-steps's](2026-10-24-the-steps-and-the-answers-shape-are-groundwork-steps-and-the-browsers-routing-is-groundwork-screens.md)
 - [Every answered message is counted on the meter, whichever door it came through](2026-10-23-every-answered-message-is-counted-on-the-meter-whichever-door.md) (built on tidy-up, not released)
 - [The steps and the answer's shape are groundwork-steps's, and the browser's routing is groundwork-screens's](2026-10-24-the-steps-and-the-answers-shape-are-groundwork-steps-and-the-browsers-routing-is-groundwork-screens.md) (groundwork v4.0.0)
+- [An http sender checks its shapes once, when it is made](2026-11-20-an-http-sender-checks-its-shapes-once-when-made.md)
 
 ## Replaced
 

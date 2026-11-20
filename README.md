@@ -103,6 +103,7 @@ the app's own route, the REPL's, a test's on a meter of its own
 | server | `find-client-address` | the asker's address, behind a proxy too |
 | server | `make-rate-limited-ring-handler` | a plain route (not a message) behind its own limiter, the same buckets, `429` over it ([why](decisions/2026-10-23-a-plain-route-is-rate-limited-by-the-same-buckets.md)) |
 | browser | `send-message!` | http: a promise of the answer, shaped, by the options' `:shaper`, with the options' `:headers` beside bridge's own (`{}` for none), and `:keep-alive?`, true for a request that finishes after the page closes (fetch's keepalive); it never fails for want of an answer: no response, or one that isn't the server's JSON, is `:groundwork-steps/no-answer {:http-status n}` under each name; nor throws for params that don't fit their `:params-shape`: that name isn't sent, it is answered `:groundwork-steps/invalid {:errors …}` (no request id) and reported with the browser's `reportError` (the console, and the page's error listeners), the names that fit sent |
+| browser | `make-http-sender` | http: a sender made once, `(send! message {:headers {} :keep-alive? false})`; the shapes and its options (`:shaper`) are checked here, once, where `send-message!` checks them on every call; each send checks only its request options and its params, and answers, refuses and reports as `send-message!` does |
 | browser | `open-sse-line!` `close-sse-line!` `open-ws-line!` `send-message-on-ws-line!` `close-ws-line!` | sse and ws lines, reopened after a break until closed (sse: after `:reconnect-after-ms`, given, also when the server answered with an HTTP error; ws: after `:reopen-after-ms`, given); an sse line says when it opens (`:on-open`, `again?` after a break) and when it breaks (`:on-break`, once per break), the line's status for an offline banner |
 
 Nothing has a default: every value that sets behaviour is written out,
@@ -207,7 +208,8 @@ fixed, and why: [the decision](decisions/2026-10-22-every-value-that-sets-behavi
                     :refusals     {:shop/closed nil}}
    :chat/said      {:params-shape nil :answer-shape nil :refusals {}}})
 
-(-> (bridge/send-message! (:http addresses) shapes-by-name {:orders/of-shop {:shop/id shop-id}} {:shaper shaper :headers {} :keep-alive? false})
+(def send! (bridge/make-http-sender (:http addresses) shapes-by-name {:shaper shaper}))   ; once
+(-> (send! {:orders/of-shop {:shop/id shop-id}} {:headers {} :keep-alive? false})
     (.then (fn [{:orders/keys [of-shop]}]
              (if (steps/is-error-answer? of-shop)
                (show-refusal! (:groundwork-steps/refused of-shop) (:groundwork-steps/data of-shop))   ; the reason is the text's key

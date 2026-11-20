@@ -18,8 +18,9 @@
      (def shaper (groundwork-shaped-json.api/make-shaper-from-settings {:most-shapes-kept 1000 :most-keys-kept 10000
                                                   :exact-decimals   groundwork-shaped-json.big/big}))
 
-     (bridge/send-message! (:http addresses) shapes-by-name {:orders/of-shop {:shop/id id}}
-                             {:shaper groundwork-shaped-json :headers {} :keep-alive? false})        ; a promise of the shaped answer
+     ;; made once: the shapes and the shaper checked here, not on each request
+     (def send! (bridge/make-http-sender (:http addresses) shapes-by-name {:shaper shaper}))
+     (send! {:orders/of-shop {:shop/id id}} {:headers {} :keep-alive? false})   ; a promise of the shaped answer
      (bridge/open-sse-line! (:sse addresses) shapes-by-name {:sync/changed on-change}
                               {:shaper groundwork-shaped-json :on-open nil :on-break nil :reconnect-after-ms sse-reconnect-after-ms})   ; the server's setting, from the page
      (bridge/open-ws-line! (:ws addresses) shapes-by-name {:chat/said on-said}
@@ -27,6 +28,8 @@
 
    Nothing has a default: the shapes and the options are checked first, and
    a missing key refuses, named (:groundwork-bridge/bad-shapes, :groundwork-bridge/bad-options).
+   They are checked when they come in: once for a sender or a line, which
+   keeps them; on every call for send-message!, which takes them each time.
    Every function that sends or reads a message takes the app's shaper under
    :shaper; a ws line keeps it for send-message-on-ws-line!."
   (:require
@@ -59,6 +62,21 @@
    bad option refuses, :groundwork-bridge/bad-options."
   [address shapes-by-name message options]
   (http/send-message! address shapes-by-name message options))
+
+(defn make-http-sender
+  "http: a sender made once, (send! message request-options), sending as
+   send-message! does: the same answers, the same refusals, the same report
+   of params that don't fit. The address, the shapes and the shaper are
+   given here and kept; the shapes and these options are checked here,
+   once, where send-message! checks them on every call (the whole shapes
+   map, every name's shapes, each time). Each send checks only its own
+   request options, every key required: :headers, more request headers by
+   lowercase name, {} for none; :keep-alive?, as send-message!'s. Options
+   here, every key required: :shaper, the app's shaper. A missing or bad
+   option refuses, :groundwork-bridge/bad-options; bad shapes,
+   :groundwork-bridge/bad-shapes."
+  [address shapes-by-name options]
+  (http/make-http-sender address shapes-by-name options))
 
 (defn open-sse-line!
   "sse: opens the stream; each named message, shaped by its :answer-shape,

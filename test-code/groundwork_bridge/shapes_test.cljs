@@ -236,3 +236,24 @@
 (deftest on-the-ws-line-params-that-dont-fit-throw
   (is (= :groundwork-bridge/bad-params
          (:type (find-problems #(shapes/turn-message-into-json-data shaper shapes-by-name {:shops/total {:shop/id "seven"}}))))))
+
+(deftest a-sender-checks-its-shapes-once-when-made
+  (testing "bad shapes and options refuse when the sender is made, before anything is sent"
+    (is (= :groundwork-bridge/bad-shapes
+           (:type (find-problems #(groundwork-bridge.api/make-http-sender "/mail/http" {:shops/total {:params-shape nil}} {:shaper shaper})))))
+    (is (= :groundwork-bridge/bad-options
+           (:type (find-problems #(groundwork-bridge.api/make-http-sender "/mail/http" shapes-by-name {:shaper shaper :headers {}}))))
+        "the per-request options are not the sender's"))
+  (testing "a send checks only its request options, and goes out as send-message!'s"
+    (let [sent  (atom [])
+          fetch (.-fetch js/globalThis)
+          send! (groundwork-bridge.api/make-http-sender "/mail/http" shapes-by-name {:shaper shaper})]
+      (set! (.-fetch js/globalThis) (fn [address options]
+                                      (swap! sent conj [address (js->clj (.-headers options)) (.-keepalive options)])
+                                      (js/Promise.resolve #js {:status 200 :text (fn [] (js/Promise.resolve "{\"greetings/hello\":1}"))})))
+      (try
+        (is (= #{:headers :keep-alive?} (set (keys (:errors (find-problems #(send! {:greetings/hello {}} {})))))))
+        (send! {:greetings/hello {}} {:headers {"idempotency-key" "k-1"} :keep-alive? true})
+        (is (= [["/mail/http" {"idempotency-key" "k-1" "accept" "application/json" "content-type" "application/json"} true]]
+               @sent))
+        (finally (set! (.-fetch js/globalThis) fetch))))))

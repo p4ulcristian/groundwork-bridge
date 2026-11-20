@@ -46,6 +46,19 @@
                           (fn [_] (shapes/make-no-answer message (.-status response))))))
              (fn [_] (shapes/make-no-answer message nil)))))
 
+(defn- send-checked-message!
+  "send-message!'s work once the shapes and options are known good: the
+   params checked against each name's :params-shape, the names that fit
+   sent, the misfits answered :groundwork-steps/invalid and reported."
+  [address shapes-by-name message options]
+  (let [{:keys [json-data errors]} (shapes/turn-message-into-json-data-or-errors (:shaper options) shapes-by-name message)
+        refusals                  (shapes/make-bad-params-refusals errors)]
+    (shapes/report-bad-params! errors)
+    (-> (if (and (empty? json-data) (seq errors))
+          (js/Promise.resolve {})
+          (post-message! address shapes-by-name (select-keys message (keys json-data)) json-data options))
+        (.then #(merge % refusals)))))
+
 (defn send-message!
   "POSTs {:orders/of-shop {…}} to the address. A promise of the answer,
    {:orders/of-shop …}: shaped data by the shapes, or a refusal, through
@@ -55,14 +68,21 @@
    sent: it is answered :groundwork-steps/invalid {:errors …} here, as the
    server would answer it, and reported (shapes/report-bad-params!); the
    names that fit are sent, and when none does nothing is. The shapes and
-   the options are checked first, and a name without shapes isn't sent."
+   the options are checked first, on every call, and a name without shapes
+   isn't sent."
   [address shapes-by-name message options]
   (settings/check-shapes-by-name shapes-by-name)
-  (let [options                   (settings/check-send-options options)
-        {:keys [json-data errors]} (shapes/turn-message-into-json-data-or-errors (:shaper options) shapes-by-name message)
-        refusals                  (shapes/make-bad-params-refusals errors)]
-    (shapes/report-bad-params! errors)
-    (-> (if (and (empty? json-data) (seq errors))
-          (js/Promise.resolve {})
-          (post-message! address shapes-by-name (select-keys message (keys json-data)) json-data options))
-        (.then #(merge % refusals)))))
+  (send-checked-message! address shapes-by-name message (settings/check-send-options options)))
+
+(defn make-http-sender
+  "An http sender: (send! message request-options), send-message! with the
+   address, the shapes and the shaper given once. The shapes and the
+   options are checked here, once; each send checks only its own
+   request-options and its params."
+  [address shapes-by-name options]
+  (settings/check-shapes-by-name shapes-by-name)
+  (let [{:keys [shaper]} (settings/check-http-sender-options options)]
+    (fn send! [message request-options]
+      (let [{:keys [headers keep-alive?]} (settings/check-request-options request-options)]
+        (send-checked-message! address shapes-by-name message
+                               {:shaper shaper :headers headers :keep-alive? keep-alive?})))))
